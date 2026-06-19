@@ -1,0 +1,318 @@
+{% extends 'base.html' %}
+{% block title %}{% if object %}Ubah{% else %}Tambah{% endif %} Alamat | ElectroShop{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="card shadow border-0 p-4" style="border-radius: 12px;">
+        <h4 class="fw-bold mb-4"><i class="bi bi-geo-alt-fill text-primary me-2"></i>{% if object %}Ubah{% else %}Tambah{% endif %} Alamat Pengiriman</h4>
+        
+        <form method="POST">
+          {% csrf_token %}
+          
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="id_label" class="form-label fw-semibold">Label Alamat</label>
+              {{ form.label }}
+              <div class="form-text">Contoh: Rumah, Kantor, Kosan</div>
+              {% if form.label.errors %}
+                <div class="text-danger small mt-1">{{ form.label.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="id_recipient_name" class="form-label fw-semibold">Nama Penerima</label>
+              {{ form.recipient_name }}
+              {% if form.recipient_name.errors %}
+                <div class="text-danger small mt-1">{{ form.recipient_name.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="id_phone_number" class="form-label fw-semibold">Nomor Telepon Penerima</label>
+              {{ form.phone_number }}
+              {% if form.phone_number.errors %}
+                <div class="text-danger small mt-1">{{ form.phone_number.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="id_postal_code" class="form-label fw-semibold">Kode Pos</label>
+              {{ form.postal_code }}
+              {% if form.postal_code.errors %}
+                <div class="text-danger small mt-1">{{ form.postal_code.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="id_street_address" class="form-label fw-semibold">Alamat Lengkap</label>
+            {{ form.street_address }}
+            <div class="form-text">Tulis nama jalan, nomor, RT/RW, kelurahan, kecamatan, atau gunakan pencarian alamat otomatis.</div>
+            {% if form.street_address.errors %}
+              <div class="text-danger small mt-1">{{ form.street_address.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <!-- Google Maps Visual Pin locator -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Pin Point Lokasi Peta</label>
+            <div id="address-map" style="height: 300px; width: 100%; border-radius: 8px;" class="border"></div>
+            <div class="form-text text-primary small"><i class="bi bi-info-circle me-1"></i>Pindahkan pin marker pada peta untuk menentukan koordinat presisi alamat pengiriman Anda secara otomatis.</div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="id_city" class="form-label fw-semibold">Kota / Kabupaten</label>
+              {{ form.city }}
+              {% if form.city.errors %}
+                <div class="text-danger small mt-1">{{ form.city.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="id_province" class="form-label fw-semibold">Provinsi</label>
+              {{ form.province }}
+              {% if form.province.errors %}
+                <div class="text-danger small mt-1">{{ form.province.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <div class="form-check">
+              {{ form.is_default }}
+              <label class="form-check-label fw-semibold" for="id_is_default">
+                Jadikan Alamat Utama
+              </label>
+            </div>
+            {% if form.is_default.errors %}
+              <div class="text-danger small mt-1">{{ form.is_default.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <!-- Render hidden fields explicitly -->
+          {{ form.place_id }}
+          {{ form.latitude }}
+          {{ form.longitude }}
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary-custom px-4 fw-bold">Simpan Alamat</button>
+            <a href="{% url 'address_list' %}" class="btn btn-outline-secondary px-4 fw-semibold">Batal</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const rawApiKey = "{{ google_maps_api_key|default:'' }}".trim();
+  const apiKey = (rawApiKey && !rawApiKey.includes('YOUR_GOOGLE_MAPS_API_KEY_HERE') && !rawApiKey.startsWith('YOUR_')) ? rawApiKey : '';
+  const mapContainer = document.getElementById('address-map');
+
+  function createLeafletMap() {
+    if (!mapContainer) return;
+    mapContainer.innerHTML = '<div id="leaflet-map" style="height:100%; width:100%;"></div>';
+
+    if (!document.getElementById('leaflet-css')) {
+      const leafletCss = document.createElement('link');
+      leafletCss.id = 'leaflet-css';
+      leafletCss.rel = 'stylesheet';
+      leafletCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(leafletCss);
+    }
+
+    const leafletScript = document.createElement('script');
+    leafletScript.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    leafletScript.onload = initializeLeaflet;
+    leafletScript.onerror = () => console.error('Leaflet failed to load.');
+    document.head.appendChild(leafletScript);
+  }
+
+  function initializeLeaflet() {
+    if (typeof L === 'undefined' || !mapContainer) return;
+    const latField = document.getElementById('id_latitude');
+    const lngField = document.getElementById('id_longitude');
+    const pidField = document.getElementById('id_place_id');
+    const streetInput = document.getElementById('id_street_address');
+
+    let myLat = -6.2088;
+    let myLng = 106.8456;
+    let zoomLevel = 12;
+
+    if (latField && latField.value && lngField && lngField.value) {
+      myLat = parseFloat(latField.value) || myLat;
+      myLng = parseFloat(lngField.value) || myLng;
+      zoomLevel = 17;
+    }
+
+    const lmap = L.map('leaflet-map').setView([myLat, myLng], zoomLevel);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(lmap);
+
+    const lmarker = L.marker([myLat, myLng], {draggable: true}).addTo(lmap);
+
+    function updateFields(lat, lng, placeId = '') {
+      if (latField) latField.value = parseFloat(lat).toFixed(8);
+      if (lngField) lngField.value = parseFloat(lng).toFixed(8);
+      if (pidField) pidField.value = placeId;
+    }
+
+    function reverseGeocode(lat, lng) {
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.display_name) {
+            if (streetInput) streetInput.value = data.display_name;
+            if (pidField) pidField.value = data.place_id || '';
+            const addr = data.address || {};
+            const cityInput = document.getElementById('id_city');
+            const provinceInput = document.getElementById('id_province');
+            const postalInput = document.getElementById('id_postal_code');
+            if (cityInput) cityInput.value = addr.city || addr.town || addr.village || addr.county || '';
+            if (provinceInput) provinceInput.value = addr.state || '';
+            if (postalInput) postalInput.value = addr.postcode || '';
+          }
+        })
+        .catch(() => {});
+    }
+
+    lmap.on('click', function(e) {
+      const { lat, lng } = e.latlng;
+      lmarker.setLatLng(e.latlng);
+      updateFields(lat, lng);
+      reverseGeocode(lat, lng);
+    });
+
+    lmarker.on('dragend', function() {
+      const pos = lmarker.getLatLng();
+      updateFields(pos.lat, pos.lng);
+      reverseGeocode(pos.lat, pos.lng);
+    });
+  }
+
+  function initializeGoogleMaps() {
+    if (!mapContainer) return;
+    const latField = document.getElementById('id_latitude');
+    const lngField = document.getElementById('id_longitude');
+    const pidField = document.getElementById('id_place_id');
+    const streetInput = document.getElementById('id_street_address');
+
+    let myLat = -6.2088;
+    let myLng = 106.8456;
+    let zoomLevel = 12;
+
+    if (latField && latField.value && lngField && lngField.value) {
+      myLat = parseFloat(latField.value) || myLat;
+      myLng = parseFloat(lngField.value) || myLng;
+      zoomLevel = 17;
+    }
+
+    const map = new google.maps.Map(mapContainer, {
+      center: { lat: myLat, lng: myLng },
+      zoom: zoomLevel,
+      mapTypeControl: false,
+      streetViewControl: false
+    });
+
+    const marker = new google.maps.Marker({
+      position: { lat: myLat, lng: myLng },
+      map,
+      draggable: true,
+      animation: google.maps.Animation.DROP
+    });
+
+    const geocoder = new google.maps.Geocoder();
+    const autocomplete = new google.maps.places.Autocomplete(streetInput, { types: ['address'] });
+    autocomplete.bindTo('bounds', map);
+
+    autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace();
+      if (!place.geometry) return;
+
+      if (place.geometry.viewport) {
+        map.fitBounds(place.geometry.viewport);
+      } else {
+        map.setCenter(place.geometry.location);
+        map.setZoom(17);
+      }
+
+      marker.setPosition(place.geometry.location);
+      updateFields(place.geometry.location.lat(), place.geometry.location.lng(), place.place_id);
+      fillAddressComponents(place);
+    });
+
+    map.addListener('click', (e) => {
+      marker.setPosition(e.latLng);
+      updateFields(e.latLng.lat(), e.latLng.lng());
+      reverseGeocode(e.latLng.lat(), e.latLng.lng());
+    });
+
+    marker.addListener('dragend', () => {
+      const pos = marker.getPosition();
+      updateFields(pos.lat(), pos.lng());
+      reverseGeocode(pos.lat(), pos.lng());
+    });
+
+    function updateFields(lat, lng, placeId = '') {
+      if (latField) latField.value = lat.toFixed(8);
+      if (lngField) lngField.value = lng.toFixed(8);
+      if (pidField) pidField.value = placeId;
+    }
+
+    function reverseGeocode(lat, lng) {
+      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+          if (streetInput) streetInput.value = results[0].formatted_address;
+          if (pidField) pidField.value = results[0].place_id;
+          fillAddressComponents(results[0]);
+        }
+      });
+    }
+
+    function fillAddressComponents(place) {
+      const comps = {};
+      if (Array.isArray(place.address_components)) {
+        place.address_components.forEach(ac => ac.types.forEach(t => comps[t] = ac.long_name));
+      }
+      const cityInput = document.getElementById('id_city');
+      const provinceInput = document.getElementById('id_province');
+      const postalInput = document.getElementById('id_postal_code');
+      if (cityInput) cityInput.value = comps.locality || comps.subadministrative_area_level_1 || comps.administrative_area_level_2 || '';
+      if (provinceInput) provinceInput.value = comps.administrative_area_level_1 || '';
+      if (postalInput) postalInput.value = comps.postal_code || '';
+    }
+  }
+
+  function fallbackToLeaflet() {
+    console.warn('Google Maps unavailable, using Leaflet fallback.');
+    createLeafletMap();
+  }
+
+  window.gm_authFailure = function() {
+    fallbackToLeaflet();
+  };
+
+  if (!apiKey) {
+    fallbackToLeaflet();
+    return;
+  }
+
+  window.initMap = initializeGoogleMaps;
+  window.gm_authFailure = fallbackToLeaflet;
+
+  const script = document.createElement('script');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initMap`;
+  script.async = true;
+  script.defer = true;
+  script.onerror = fallbackToLeaflet;
+  document.head.appendChild(script);
+});
+</script>
+{% endblock %}

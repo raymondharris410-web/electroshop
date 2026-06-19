@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block title %}Verifikasi OTP | ElectroShop{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+  <div class="row justify-content-center">
+    <div class="col-md-5">
+      <div class="card shadow border-0 p-4" style="border-radius: 16px;">
+        <div class="card-body">
+          <div class="text-center mb-4">
+            <div class="d-inline-flex align-items-center justify-content-center bg-primary bg-opacity-10 text-primary rounded-circle mb-3" style="width: 72px; height: 72px;">
+              <i class="bi bi-shield-check" style="font-size: 36px;"></i>
+            </div>
+            <h4 class="fw-bold mb-1">Verifikasi Email Anda</h4>
+            <p class="text-muted small">Kami telah mengirimkan 6 digit kode OTP ke <strong class="text-dark">{{ masked_email }}</strong></p>
+          </div>
+          <form method="POST" id="otp-form">
+            {% csrf_token %}
+            
+            <!-- OTP digit inputs -->
+            <div class="d-flex justify-content-between gap-2 mb-4" id="otp-inputs-container">
+              <input type="text" name="otp_1" class="form-control otp-digit-field text-center fs-3 fw-bold" maxlength="1" pattern="[0-9]" inputmode="numeric" required autofocus autocomplete="off" style="width: 52px; height: 56px; border-radius: 10px;">
+              <input type="text" name="otp_2" class="form-control otp-digit-field text-center fs-3 fw-bold" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off" style="width: 52px; height: 56px; border-radius: 10px;">
+              <input type="text" name="otp_3" class="form-control otp-digit-field text-center fs-3 fw-bold" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off" style="width: 52px; height: 56px; border-radius: 10px;">
+              <input type="text" name="otp_4" class="form-control otp-digit-field text-center fs-3 fw-bold" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off" style="width: 52px; height: 56px; border-radius: 10px;">
+              <input type="text" name="otp_5" class="form-control otp-digit-field text-center fs-3 fw-bold" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off" style="width: 52px; height: 56px; border-radius: 10px;">
+              <input type="text" name="otp_6" class="form-control otp-digit-field text-center fs-3 fw-bold" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off" style="width: 52px; height: 56px; border-radius: 10px;">
+            </div>
+
+            <!-- Hidden input for combined code compatibility -->
+            <input type="hidden" name="otp_code" id="otp-combined-code">
+
+            <button type="submit" class="btn btn-primary-custom w-100 py-2.5 fw-bold mb-3">
+              <i class="bi bi-patch-check-fill me-2"></i>Verifikasi Akun
+            </button>
+          </form>
+
+          <div class="text-center">
+            <span class="text-muted small">Belum menerima kode OTP?</span>
+            <div class="mt-2">
+              <form action="{% url 'resend_otp' %}" method="POST" id="resend-otp-form" class="d-inline">
+                {% csrf_token %}
+                <button type="button" class="btn btn-link p-0 small text-decoration-none fw-semibold" id="btn-resend-otp" disabled>
+                  Kirim Ulang OTP <span id="resend-timer">(60s)</span>
+                </button>
+              </form>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const container = document.getElementById('otp-inputs-container');
+  const inputs = container.querySelectorAll('.otp-digit-field');
+  const combinedInput = document.getElementById('otp-combined-code');
+  const form = document.getElementById('otp-form');
+
+  // Autofocus handling and moving to next input
+  inputs.forEach((input, index) => {
+    input.addEventListener('input', (e) => {
+      // Keep only numbers
+      input.value = input.value.replace(/[^0-9]/g, '');
+      
+      if (input.value.length === 1) {
+        if (index < inputs.length - 1) {
+          inputs[index + 1].focus();
+        }
+      }
+      combineOTP();
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace') {
+        if (input.value.length === 0 && index > 0) {
+          inputs[index - 1].focus();
+          inputs[index - 1].value = '';
+        } else {
+          input.value = '';
+        }
+        combineOTP();
+      }
+    });
+
+    // Handle paste event
+    input.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pasteData = e.clipboardData.getData('text').trim().replace(/[^0-9]/g, '');
+      if (pasteData.length === 6) {
+        inputs.forEach((inp, idx) => {
+          inp.value = pasteData[idx];
+        });
+        combineOTP();
+        form.submit();
+      }
+    });
+  });
+
+  function combineOTP() {
+    let code = '';
+    inputs.forEach(inp => {
+      code += inp.value;
+    });
+    combinedInput.value = code;
+  }
+
+  // Resend OTP timer handler
+  const resendBtn = document.getElementById('btn-resend-otp');
+  const resendTimerDisplay = document.getElementById('resend-timer');
+  const resendForm = document.getElementById('resend-otp-form');
+  let countdown = 60;
+
+  function startTimer() {
+    countdown = 60;
+    resendBtn.disabled = true;
+    resendTimerDisplay.style.display = 'inline';
+    
+    const interval = setInterval(() => {
+      countdown--;
+      resendTimerDisplay.textContent = `(${countdown}s)`;
+      if (countdown <= 0) {
+        clearInterval(interval);
+        resendBtn.disabled = false;
+        resendTimerDisplay.style.display = 'none';
+      }
+    }, 1000);
+  }
+
+  startTimer();
+
+  // AJAX Resend OTP submission
+  resendBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    resendBtn.disabled = true;
+    resendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Mengirim...';
+
+    const formData = new FormData(resendForm);
+    try {
+      const response = await fetch(resendForm.action, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        showToast(data.message, 'success');
+        resendBtn.innerHTML = 'Kirim Ulang OTP <span id="resend-timer">(60s)</span>';
+        startTimer();
+      } else {
+        showToast(data.message || 'Gagal mengirim ulang OTP.', 'danger');
+        resendBtn.innerHTML = 'Kirim Ulang OTP';
+        resendBtn.disabled = false;
+      }
+    } catch (err) {
+      showToast('Koneksi bermasalah. Coba lagi.', 'danger');
+      resendBtn.innerHTML = 'Kirim Ulang OTP';
+      resendBtn.disabled = false;
+    }
+  });
+});
+</script>
+{% endblock %}

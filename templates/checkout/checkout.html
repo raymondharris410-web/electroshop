@@ -1,0 +1,797 @@
+{% extends 'base.html' %}
+{% block title %}Checkout Pesanan | ElectroShop{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+  <!-- Progress Visualizer for Checkout Steps -->
+  <div class="row mb-5">
+    <div class="col-12">
+      <div class="card shadow border-0 p-4" style="border-radius: 16px;">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+          <h4 class="fw-bold mb-0 text-dark"><i class="bi bi-credit-card text-primary me-2"></i>Checkout Pesanan</h4>
+          <div class="d-flex align-items-center gap-2 small">
+            <span class="badge bg-primary text-white rounded-pill px-3 py-2"><i class="bi bi-geo-alt me-1"></i>1. Alamat</span>
+            <i class="bi bi-chevron-right text-muted"></i>
+            <span class="badge bg-primary text-white rounded-pill px-3 py-2"><i class="bi bi-truck me-1"></i>2. Kurir</span>
+            <i class="bi bi-chevron-right text-muted"></i>
+            <span class="badge bg-primary text-white rounded-pill px-3 py-2"><i class="bi bi-box-seam me-1"></i>3. Paket</span>
+            <i class="bi bi-chevron-right text-muted"></i>
+            <span class="badge bg-primary text-white rounded-pill px-3 py-2"><i class="bi bi-bank me-1"></i>4. Bank</span>
+            <i class="bi bi-chevron-right text-muted"></i>
+            <span class="badge bg-success text-white rounded-pill px-3 py-2"><i class="bi bi-check-circle me-1"></i>5. Konfirmasi</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <form action="{% url 'checkout' %}" method="POST" id="checkout-form">
+    {% csrf_token %}
+    
+    <div class="row g-4">
+      <!-- Left side: Step-by-Step Selection Form -->
+      <div class="col-lg-8">
+        
+        <!-- STEP 1: Shipping Address Selection -->
+        <div class="card shadow border-0 p-4 mb-4" style="border-radius: 12px;">
+          <div class="d-flex align-items-center mb-3">
+            <h5 class="fw-bold mb-0 text-dark">
+              <span class="badge bg-primary text-white rounded-circle me-2" style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.9rem;">1</span>
+              Alamat Pengiriman
+            </h5>
+            <button type="button" class="btn btn-sm btn-outline-primary ms-auto" data-bs-toggle="modal" data-bs-target="#addAddressModal">
+              <i class="bi bi-plus-lg me-1"></i>Tambah Alamat Baru
+            </button>
+          </div>
+          
+          {% if addresses %}
+            <div class="mb-3" id="address-select-container">
+              <label for="address_id" class="form-label small fw-semibold">Pilih Alamat Tujuan</label>
+              <select name="address_id" id="address_id" class="form-select">
+                {% for addr in addresses %}
+                  <option value="{{ addr.id }}" {% if addr == active_address %}selected{% endif %}>
+                    [{{ addr.label }}] {{ addr.recipient_name }} - {{ addr.street_address|slice:":40" }}... ({{ addr.city }})
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            
+            <!-- Address Snapshot Details -->
+            <div class="border rounded p-3 bg-light" id="selected-address-snapshot">
+              {% if active_address %}
+                <h6 class="fw-bold mb-1 text-dark" id="snap-name">{{ active_address.recipient_name }}</h6>
+                <p class="mb-1 text-muted small" id="snap-phone">{{ active_address.phone_number }}</p>
+                <p class="mb-0 text-muted small" id="snap-details">{{ active_address.street_address }}, {{ active_address.city }}, {{ active_address.province }}, {{ active_address.postal_code }}</p>
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="alert alert-warning mb-0 d-flex align-items-center justify-content-between flex-wrap gap-2" id="no-address-alert">
+              <span><i class="bi bi-exclamation-triangle me-2"></i>Anda belum memiliki alamat pengiriman.</span>
+              <button type="button" class="btn btn-sm btn-warning fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#addAddressModal">
+                <i class="bi bi-plus-lg me-1"></i>Tambah Alamat
+              </button>
+            </div>
+            
+            <!-- Hidden containers to be shown when address is dynamically added -->
+            <div class="mb-3 d-none" id="address-select-container">
+              <label for="address_id" class="form-label small fw-semibold">Pilih Alamat Tujuan</label>
+              <select name="address_id" id="address_id" class="form-select"></select>
+            </div>
+            <div class="border rounded p-3 bg-light d-none" id="selected-address-snapshot">
+              <h6 class="fw-bold mb-1 text-dark" id="snap-name"></h6>
+              <p class="mb-1 text-muted small" id="snap-phone"></p>
+              <p class="mb-0 text-muted small" id="snap-details"></p>
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- STEP 2 & 3: Courier and Package Selection -->
+        <div class="card shadow border-0 p-4 mb-4" style="border-radius: 12px;">
+          <h5 class="fw-bold mb-3 d-flex align-items-center text-dark">
+            <span class="badge bg-primary text-white rounded-circle me-2" style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.9rem;">2 & 3</span>
+            Metode Pengiriman
+          </h5>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="courier" class="form-label small fw-semibold">Pilih Kurir (Langkah 2)</label>
+              <select name="courier" id="courier" class="form-select" required>
+                {% for code, label in couriers %}
+                  {% if code != 'TIKI' %}
+                    <option value="{{ code }}">{{ label }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label for="shipping_service" class="form-label small fw-semibold">Pilih Paket Layanan (Langkah 3)</label>
+              <select name="shipping_service" id="shipping_service" class="form-select" required>
+                <!-- Dynamically populated via JS -->
+              </select>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label small fw-semibold">Estimasi Ongkos Kirim & Pengiriman</label>
+              <input type="text" class="form-control bg-light text-dark fw-bold" id="shipping-cost-display" value="Rp 0" readonly>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4: Bank Transfer Selection -->
+        <div class="card shadow border-0 p-4 mb-4" style="border-radius: 12px;">
+          <h5 class="fw-bold mb-3 d-flex align-items-center text-dark">
+            <span class="badge bg-primary text-white rounded-circle me-2" style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.9rem;">4</span>
+            Pilih Bank Transfer
+          </h5>
+          <div>
+            <label for="selected_bank" class="form-label small fw-semibold">Bank Tujuan Transfer</label>
+            <select name="selected_bank" id="selected_bank" class="form-select" required>
+              <option value="BCA" selected>Bank Central Asia (BCA)</option>
+              <option value="BRI">Bank Rakyat Indonesia (BRI)</option>
+              <option value="BNI">Bank Negara Indonesia (BNI)</option>
+              <option value="MANDIRI">Bank Mandiri</option>
+              <option value="CIMB">CIMB Niaga</option>
+            </select>
+            <div class="form-text mt-2 text-muted">
+              <i class="bi bi-info-circle me-1"></i>Anda akan diberikan detail rekening tujuan dan kode unik transaksi setelah membuat pesanan.
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 5: Items Review -->
+        <div class="card shadow border-0 p-4" style="border-radius: 12px;">
+          <h5 class="fw-bold mb-3 text-dark">
+            <span class="badge bg-primary text-white rounded-circle me-2" style="width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.9rem;">5</span>
+            Review Barang Belanja & Konfirmasi
+          </h5>
+          <div class="d-flex flex-column gap-3">
+            {% for item in items %}
+              <div class="d-flex justify-content-between align-items-center {% if not forloop.last %}border-bottom pb-3{% endif %}">
+                <div class="d-flex align-items-center">
+                  <img src="{{ item.product.primary_image_url }}" alt="{{ item.product.name }}" class="rounded me-3" style="width: 50px; height: 50px; object-fit: cover;">
+                  <div>
+                    <h6 class="fw-bold mb-0 text-dark" style="font-size: 0.95rem;">{{ item.product.name }}</h6>
+                    <small class="text-muted">{{ item.quantity }} x Rp {{ item.product.final_price|floatformat:0 }}</small>
+                  </div>
+                </div>
+                <span class="fw-semibold text-dark">Rp {{ item.subtotal|floatformat:0 }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Right side: Promo Voucher & Order Totals Summary -->
+      <div class="col-lg-4">
+        <!-- Voucher Promo Code -->
+        <div class="card shadow border-0 p-4 mb-4" style="border-radius: 12px;">
+          <h5 class="fw-bold mb-3 text-dark"><i class="bi bi-ticket-perforated me-2 text-primary"></i>Gunakan Voucher</h5>
+          <div class="input-group">
+            <input type="text" class="form-control" placeholder="Kode kupon" name="coupon_code" id="coupon_code">
+            <button class="btn btn-outline-primary fw-bold" type="button" id="btn-apply-coupon">Gunakan</button>
+          </div>
+          <div id="coupon-message" class="small mt-2 d-none"></div>
+        </div>
+
+        <!-- Totals Card -->
+        <div class="card shadow border-0 p-4" style="border-radius: 12px; position: sticky; top: 90px;">
+          <h5 class="fw-bold mb-3 text-dark">Ringkasan Pembayaran</h5>
+          
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Subtotal Barang</span>
+            <span class="fw-semibold text-dark">Rp {{ cart.subtotal|floatformat:0 }}</span>
+          </div>
+          
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Ongkos Kirim</span>
+            <span class="fw-semibold text-dark" id="summary-shipping">Rp 0</span>
+          </div>
+
+          <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">Pajak (PPN 11%)</span>
+            <span class="fw-semibold text-dark" id="summary-tax">Rp 0</span>
+          </div>
+
+          <div class="d-flex justify-content-between text-danger mb-4 d-none" id="summary-discount-row">
+            <span>Potongan Diskon</span>
+            <span class="fw-semibold" id="summary-discount">-Rp 0</span>
+          </div>
+
+          <hr class="text-secondary">
+          
+          <div class="d-flex justify-content-between mb-4">
+            <span class="fw-bold text-dark fs-5">Total Bayar</span>
+            <span class="fw-bold text-primary fs-4" id="summary-total">Rp 0</span>
+          </div>
+
+          {% if addresses %}
+            <button type="submit" class="btn btn-primary-custom w-100 py-2.5 fw-bold">Buat Pesanan & Bayar</button>
+          {% else %}
+            <button type="button" class="btn btn-secondary w-100 py-2.5 fw-bold" disabled>Alamat Belum Ada</button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Modal Tambah Alamat -->
+<div class="modal fade" id="addAddressModal" tabindex="-1" aria-labelledby="addAddressModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 12px; overflow: hidden;">
+      <div class="modal-header bg-primary text-white border-0 py-3">
+        <h5 class="modal-title fw-bold" id="addAddressModalLabel"><i class="bi bi-geo-alt me-2"></i>Tambah Alamat Baru</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="ajax-address-form" method="POST" action="{% url 'address_add' %}">
+        {% csrf_token %}
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label for="id_label" class="form-label small fw-semibold text-dark">Label Alamat</label>
+            <input type="text" name="label" id="id_label" class="form-control" placeholder="Contoh: Rumah, Kantor" required>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label for="id_recipient_name" class="form-label small fw-semibold text-dark">Nama Penerima</label>
+              <input type="text" name="recipient_name" id="id_recipient_name" class="form-control" placeholder="Nama Penerima" required>
+            </div>
+            <div class="col-md-6">
+              <label for="id_phone_number" class="form-label small fw-semibold text-dark">Nomor Telepon</label>
+              <input type="text" name="phone_number" id="id_phone_number" class="form-control" placeholder="Nomor Telepon" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label for="id_street_address" class="form-label small fw-semibold text-dark">Alamat Lengkap</label>
+            <textarea name="street_address" id="id_street_address" class="form-control" rows="2" placeholder="Nama jalan, gedung, blok, RT/RW" required></textarea>
+          </div>
+          
+          <!-- Visual Map Container in Modal -->
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-dark">Pilih Lokasi Peta</label>
+            <div id="modal-address-map" style="height: 200px; width: 100%; border-radius: 8px;" class="border bg-light"></div>
+            <div class="form-text small text-primary"><i class="bi bi-info-circle me-1"></i>Pindahkan marker pada peta untuk menentukan koordinat presisi.</div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label for="id_city" class="form-label small fw-semibold text-dark">Kota/Kabupaten</label>
+              <input type="text" name="city" id="id_city" class="form-control" placeholder="Kota/Kabupaten" required>
+            </div>
+            <div class="col-md-6">
+              <label for="id_province" class="form-label small fw-semibold text-dark">Provinsi</label>
+              <input type="text" name="province" id="id_province" class="form-control" placeholder="Provinsi" required>
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="id_postal_code" class="form-label small fw-semibold text-dark">Kode Pos</label>
+              <input type="text" name="postal_code" id="id_postal_code" class="form-control" placeholder="Kode Pos" required>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="is_default" id="id_is_default" value="true">
+                <label class="form-check-label small fw-semibold text-dark" for="id_is_default">
+                  Jadikan Alamat Utama
+                </label>
+              </div>
+            </div>
+          </div>
+          <!-- Hidden fields for Google Maps place verification -->
+          <input type="hidden" name="place_id" id="id_place_id">
+          <input type="hidden" name="latitude" id="id_latitude">
+          <input type="hidden" name="longitude" id="id_longitude">
+        </div>
+        <div class="modal-footer bg-light border-0 py-3">
+          <button type="button" class="btn btn-outline-secondary fw-semibold btn-sm" data-bs-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-primary fw-bold btn-sm" id="btn-save-address">Simpan Alamat</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const subtotal = parseFloat("{{ cart.subtotal }}");
+  let shippingCost = 0;
+  const totalWeight = {{ total_weight_grams|default:1000 }};
+  const tax = Math.round(subtotal * 0.11);
+  let discount = 0;
+
+  // Courier packages mappings
+  const serviceChoices = {
+    'JNE': [
+      { value: 'REG', label: 'REG (Reguler) - Rp 9.000 / kg - 2-5 hari kerja' },
+      { value: 'OKE', label: 'OKE (Ekonomis) - Rp 7.000 / kg - 5-7 hari kerja' },
+      { value: 'YES', label: 'YES (Yakin Esok Sampai) - Rp 22.000 / kg - 1 hari kerja' }
+    ],
+    'JNT': [
+      { value: 'EZ', label: 'EZ (Reguler) - Rp 9.500 / kg - 2-3 hari kerja' },
+      { value: 'ECO', label: 'ECO (Ekonomi) - Rp 6.500 / kg - 5-8 hari kerja' },
+      { value: 'SUPER', label: 'Super (Express) - Rp 21.000 / kg - 1 hari kerja' }
+    ],
+    'SICEPAT': [
+      { value: 'REG', label: 'REG (Reguler) - Rp 9.000 / kg - 2-4 hari kerja' },
+      { value: 'BEST', label: 'BEST (Besok Sampai Tujuan) - Rp 20.000 / kg - 1 hari kerja' },
+      { value: 'HALU', label: 'HALU (Ekonomi) - Rp 6.000 / kg - 5-7 hari kerja' }
+    ],
+    'POS': [
+      { value: 'REGULER', label: 'Pos Reguler - Rp 8.500 / kg - 3-6 hari kerja' },
+      { value: 'KILAT_KHUSUS', label: 'Pos Kilat Khusus - Rp 15.000 / kg - 1-2 hari kerja' }
+    ]
+  };
+
+  // Populate shipping service select based on chosen courier
+  const courierSelect = document.getElementById('courier');
+  const serviceSelect = document.getElementById('shipping_service');
+
+  function populateServices() {
+    const selectedCourier = courierSelect.value || 'JNE';
+    const packages = serviceChoices[selectedCourier] || [];
+    
+    serviceSelect.innerHTML = '';
+    packages.forEach(pkg => {
+      const opt = document.createElement('option');
+      opt.value = pkg.value;
+      opt.textContent = pkg.label;
+      serviceSelect.appendChild(opt);
+    });
+  }
+
+  // Populate on load
+  populateServices();
+
+  function recalculateTotals() {
+    const finalTotal = (subtotal + shippingCost + tax) - discount;
+    document.getElementById('summary-tax').textContent = 'Rp ' + tax.toLocaleString('id-ID');
+    document.getElementById('summary-total').textContent = 'Rp ' + finalTotal.toLocaleString('id-ID');
+    document.getElementById('summary-shipping').textContent = 'Rp ' + shippingCost.toLocaleString('id-ID');
+  }
+
+  recalculateTotals();
+
+  // Handle coupon application AJAX
+  const applyBtn = document.getElementById('btn-apply-coupon');
+  applyBtn.addEventListener('click', async () => {
+    const code = document.getElementById('coupon_code').value.trim();
+    const messageBlock = document.getElementById('coupon-message');
+    
+    if(!code) {
+      messageBlock.className = 'small mt-2 text-danger';
+      messageBlock.textContent = 'Silakan isi kode voucher.';
+      messageBlock.classList.remove('d-none');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/coupons/validate/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({
+          code: code,
+          subtotal: subtotal
+        })
+      });
+
+      const data = await response.json();
+      
+      if(response.ok && data.valid) {
+        discount = Math.round(data.discount_amount);
+        
+        messageBlock.className = 'small mt-2 text-success';
+        messageBlock.textContent = data.message;
+        messageBlock.classList.remove('d-none');
+        
+        document.getElementById('summary-discount').textContent = '-Rp ' + discount.toLocaleString('id-ID');
+        document.getElementById('summary-discount-row').classList.remove('d-none');
+        
+        recalculateTotals();
+      } else {
+        discount = 0;
+        messageBlock.className = 'small mt-2 text-danger';
+        messageBlock.textContent = data.message || 'Kupon tidak valid.';
+        messageBlock.classList.remove('d-none');
+        
+        document.getElementById('summary-discount-row').classList.add('d-none');
+        recalculateTotals();
+      }
+    } catch(err) {
+      showToast('Koneksi internet bermasalah.', 'danger');
+    }
+  });
+
+  // Dynamic address changes updates in snapshot cards
+  const addressesData = {
+    {% for addr in addresses %}
+      "{{ addr.id }}": {
+        name: "{{ addr.recipient_name }}",
+        phone: "{{ addr.phone_number }}",
+        province: "{{ addr.province|escapejs }}",
+        details: "{{ addr.street_address|escapejs }}, {{ addr.city|escapejs }}, {{ addr.province|escapejs }}, {{ addr.postal_code|escapejs }}"
+      },
+    {% endfor %}
+  };
+
+  function bindAddressChangeEvent(selectElement) {
+    if (selectElement) {
+      selectElement.addEventListener('change', (e) => {
+        const id = e.target.value;
+        const addr = addressesData[id];
+        if(addr) {
+          document.getElementById('snap-name').textContent = addr.name;
+          document.getElementById('snap-phone').textContent = addr.phone;
+          document.getElementById('snap-details').textContent = addr.details;
+          updateShippingCost();
+        }
+      });
+    }
+  }
+
+  const initialAddressSelect = document.getElementById('address_id');
+  bindAddressChangeEvent(initialAddressSelect);
+
+  // Handle AJAX address submission from modal
+  const ajaxAddressForm = document.getElementById('ajax-address-form');
+  if(ajaxAddressForm) {
+    ajaxAddressForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const saveBtn = document.getElementById('btn-save-address');
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Menyimpan...';
+
+      const formData = new FormData(ajaxAddressForm);
+      try {
+        const response = await fetch(ajaxAddressForm.action, {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+          },
+          body: formData
+        });
+
+        const data = await response.json();
+        if(response.ok && data.success) {
+          const modalEl = document.getElementById('addAddressModal');
+          const modalInstance = bootstrap.Modal.getInstance(modalEl);
+          if (modalInstance) {
+            modalInstance.hide();
+          }
+          ajaxAddressForm.reset();
+
+          const selectContainer = document.getElementById('address-select-container');
+          const noAddressAlert = document.getElementById('no-address-alert');
+          
+          if(noAddressAlert) {
+            noAddressAlert.classList.add('d-none');
+          }
+          
+          let addressSelect = document.getElementById('address_id');
+          if(!addressSelect) {
+            if(selectContainer) {
+              selectContainer.classList.remove('d-none');
+              addressSelect = selectContainer.querySelector('select');
+              bindAddressChangeEvent(addressSelect);
+            }
+          }
+          
+          if(addressSelect) {
+            const opt = document.createElement('option');
+            opt.value = data.address.id;
+            opt.textContent = `[${data.address.label}] ${data.address.recipient_name} - ${data.address.street_address.substring(0, 40)}... (${data.address.city})`;
+            opt.selected = true;
+            addressSelect.appendChild(opt);
+            
+            addressesData[data.address.id] = {
+              name: data.address.recipient_name,
+              phone: data.address.phone_number,
+              province: data.address.province,
+              details: `${data.address.street_address}, ${data.address.city}, ${data.address.province}, ${data.address.postal_code}`
+            };
+            
+            const event = new Event('change');
+            addressSelect.dispatchEvent(event);
+          }
+
+          const snapContainer = document.getElementById('selected-address-snapshot');
+          if(snapContainer) {
+            snapContainer.classList.remove('d-none');
+            document.getElementById('snap-name').textContent = data.address.recipient_name;
+            document.getElementById('snap-phone').textContent = data.address.phone_number;
+            document.getElementById('snap-details').textContent = `${data.address.street_address}, ${data.address.city}, ${data.address.province}, ${data.address.postal_code}`;
+          }
+
+          const checkoutSubmitBtn = document.querySelector('button[type="submit"]');
+          if(checkoutSubmitBtn) {
+            checkoutSubmitBtn.disabled = false;
+            checkoutSubmitBtn.textContent = 'Buat Pesanan & Bayar';
+            checkoutSubmitBtn.className = 'btn btn-primary-custom w-100 py-2.5 fw-bold';
+          }
+          
+          const emptyBtnPlaceholder = document.querySelector('.btn-secondary[disabled]');
+          if(emptyBtnPlaceholder) {
+            const parent = emptyBtnPlaceholder.parentElement;
+            const activeBtn = document.createElement('button');
+            activeBtn.type = 'submit';
+            activeBtn.className = 'btn btn-primary-custom w-100 py-2.5 fw-bold';
+            activeBtn.textContent = 'Buat Pesanan & Bayar';
+            parent.replaceChild(activeBtn, emptyBtnPlaceholder);
+          }
+        } else {
+          alert('Gagal menyimpan alamat: ' + JSON.stringify(data.errors));
+        }
+      } catch(err) {
+        console.error(err);
+        alert('Terjadi kesalahan koneksi.');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Simpan Alamat';
+      }
+    });
+  }
+
+  // Update shipping cost via AJAX
+  async function updateShippingCost() {
+    try {
+      const courier = courierSelect.value || 'JNE';
+      const service = serviceSelect.value || 'REG';
+      const addressSelect = document.getElementById('address_id');
+      const addrId = addressSelect ? addressSelect.value : null;
+      const province = addrId && addressesData[addrId] ? addressesData[addrId].province : '';
+
+      const url = `/cart/api/shipping-cost/?courier=${encodeURIComponent(courier)}&service=${encodeURIComponent(service)}&weight=${encodeURIComponent(totalWeight)}&province=${encodeURIComponent(province)}`;
+      const resp = await fetch(url);
+      if(!resp.ok) return;
+      const data = await resp.json();
+      shippingCost = parseInt(data.cost) || 0;
+      
+      document.getElementById('shipping-cost-display').value = `${data.cost_formatted} (Est: ${data.estimate})`;
+      recalculateTotals();
+    } catch (err) {
+      console.error('Error fetching shipping cost', err);
+    }
+  }
+
+  courierSelect.addEventListener('change', () => {
+    populateServices();
+    updateShippingCost();
+  });
+
+  serviceSelect.addEventListener('change', () => {
+    updateShippingCost();
+  });
+
+  // Initial shipping cost load
+  updateShippingCost();
+
+  // Google Maps visual integration in Modal
+  (function() {
+    const rawApiKey = "{{ google_maps_api_key|default:'' }}".trim();
+    const apiKey = (rawApiKey && !rawApiKey.includes('YOUR_GOOGLE_MAPS_API_KEY_HERE') && !rawApiKey.startsWith('YOUR_')) ? rawApiKey : '';
+    const modalEl = document.getElementById('addAddressModal');
+    let modalMapInitialized = false;
+
+    function createLeafletModalMap(mapContainer, latField, lngField, pidField, streetInput) {
+      if (!mapContainer) return;
+      mapContainer.innerHTML = '<div id="leaflet-modal-map" style="height:100%; width:100%;"></div>';
+
+      if (!document.getElementById('leaflet-css')) {
+        const leafletCss = document.createElement('link');
+        leafletCss.id = 'leaflet-css';
+        leafletCss.rel = 'stylesheet';
+        leafletCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(leafletCss);
+      }
+
+      const leafletScript = document.createElement('script');
+      leafletScript.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      leafletScript.onload = function() {
+        if (typeof L === 'undefined') return;
+
+        let myLat = -6.2088;
+        let myLng = 106.8456;
+        let zoomLevel = 12;
+        if (latField && latField.value && lngField && lngField.value) {
+          myLat = parseFloat(latField.value) || myLat;
+          myLng = parseFloat(lngField.value) || myLng;
+          zoomLevel = 17;
+        }
+
+        const lmap = L.map('leaflet-modal-map').setView([myLat, myLng], zoomLevel);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(lmap);
+
+        const lmarker = L.marker([myLat, myLng], {draggable: true}).addTo(lmap);
+
+        function updateFields(lat, lng, placeId = '') {
+          if (latField) latField.value = parseFloat(lat).toFixed(8);
+          if (lngField) lngField.value = parseFloat(lng).toFixed(8);
+          if (pidField) pidField.value = placeId;
+        }
+
+        function reverseGeocode(lat, lng) {
+          fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`)
+            .then(r => r.json())
+            .then(data => {
+              if (data && data.display_name) {
+                if (streetInput) streetInput.value = data.display_name;
+                if (pidField) pidField.value = data.place_id || '';
+                const addr = data.address || {};
+                const cityInput = document.getElementById('id_city');
+                const provinceInput = document.getElementById('id_province');
+                const postalInput = document.getElementById('id_postal_code');
+                if (cityInput) cityInput.value = addr.city || addr.town || addr.village || addr.county || '';
+                if (provinceInput) provinceInput.value = addr.state || '';
+                if (postalInput) postalInput.value = addr.postcode || '';
+              }
+            })
+            .catch(() => {});
+        }
+
+        lmap.on('click', function(e) {
+          lmarker.setLatLng(e.latlng);
+          updateFields(e.latlng.lat, e.latlng.lng);
+          reverseGeocode(e.latlng.lat, e.latlng.lng);
+        });
+
+        lmarker.on('dragend', function() {
+          const p = lmarker.getLatLng();
+          updateFields(p.lat, p.lng);
+          reverseGeocode(p.lat, p.lng);
+        });
+      };
+      leafletScript.onerror = function() {
+        console.error('Leaflet failed to load for modal fallback.');
+      };
+      document.head.appendChild(leafletScript);
+    }
+
+    function initializeGoogleMapsModal(mapContainer, streetInput, latField, lngField, pidField) {
+      if (!mapContainer || typeof google === 'undefined') {
+        return;
+      }
+
+      let myLat = -6.2088;
+      let myLng = 106.8456;
+      if (latField && latField.value && lngField && lngField.value) {
+        myLat = parseFloat(latField.value) || myLat;
+        myLng = parseFloat(lngField.value) || myLng;
+      }
+
+      const map = new google.maps.Map(mapContainer, {
+        center: { lat: myLat, lng: myLng },
+        zoom: 12,
+        mapTypeControl: false,
+        streetViewControl: false
+      });
+
+      const marker = new google.maps.Marker({
+        position: { lat: myLat, lng: myLng },
+        map: map,
+        draggable: true,
+        animation: google.maps.Animation.DROP
+      });
+
+      const geocoder = new google.maps.Geocoder();
+      const autocomplete = new google.maps.places.Autocomplete(streetInput, { types: ['address'] });
+      autocomplete.bindTo('bounds', map);
+
+      autocomplete.addListener('place_changed', function() {
+        const place = autocomplete.getPlace();
+        if (!place.geometry) return;
+        if (place.geometry.viewport) {
+          map.fitBounds(place.geometry.viewport);
+        } else {
+          map.setCenter(place.geometry.location);
+          map.setZoom(17);
+        }
+        marker.setPosition(place.geometry.location);
+        if (pidField) pidField.value = place.place_id || '';
+        if (latField) latField.value = place.geometry.location.lat().toFixed(8);
+        if (lngField) lngField.value = place.geometry.location.lng().toFixed(8);
+        fillComponents(place);
+      });
+
+      map.addListener('click', (e) => {
+        marker.setPosition(e.latLng);
+        updateFields(e.latLng.lat(), e.latLng.lng());
+        reverseGeocode(e.latLng.lat(), e.latLng.lng());
+      });
+
+      marker.addListener('dragend', () => {
+        const pos = marker.getPosition();
+        updateFields(pos.lat(), pos.lng());
+        reverseGeocode(pos.lat(), pos.lng());
+      });
+
+      function updateFields(lat, lng, placeId = '') {
+        if (latField) latField.value = lat.toFixed(8);
+        if (lngField) lngField.value = lng.toFixed(8);
+        if (pidField) pidField.value = placeId;
+      }
+
+      function reverseGeocode(lat, lng) {
+        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+          if (status === 'OK' && results[0]) {
+            if (streetInput) streetInput.value = results[0].formatted_address;
+            if (pidField) pidField.value = results[0].place_id;
+            fillComponents(results[0]);
+          }
+        });
+      }
+
+      function fillComponents(place) {
+        const comps = {};
+        if (Array.isArray(place.address_components)) {
+          place.address_components.forEach(ac => ac.types.forEach(t => comps[t] = ac.long_name));
+        }
+        const cityInput = document.getElementById('id_city');
+        const provinceInput = document.getElementById('id_province');
+        const postalInput = document.getElementById('id_postal_code');
+        if (cityInput) cityInput.value = comps.locality || comps.subadministrative_area_level_1 || comps.administrative_area_level_2 || '';
+        if (provinceInput) provinceInput.value = comps.administrative_area_level_1 || '';
+        if (postalInput) postalInput.value = comps.postal_code || '';
+      }
+    }
+
+    function loadGoogleMapsModalScript(callback) {
+      if (!apiKey) {
+        callback(false);
+        return;
+      }
+      window.gm_authFailure = function() {
+        callback(false);
+      };
+      const existing = document.getElementById('google-maps-modal-script');
+      if (existing) {
+        existing.onerror = function() { callback(false); };
+        existing.addEventListener('load', function() {
+          callback(!!(window.google && window.google.maps));
+        });
+        existing.addEventListener('error', function() {
+          callback(false);
+        });
+        if (window.google && window.google.maps) {
+          callback(true);
+        }
+        return;
+      }
+      const script = document.createElement('script');
+      script.id = 'google-maps-modal-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onerror = function() { callback(false); };
+      script.onload = function() { callback(!!(window.google && window.google.maps)); };
+      document.head.appendChild(script);
+    }
+
+    if (modalEl) {
+      modalEl.addEventListener('shown.bs.modal', function () {
+        if (modalMapInitialized) return;
+        modalMapInitialized = true;
+
+        const mapContainer = document.getElementById('modal-address-map');
+        const streetInput = document.getElementById('id_street_address');
+        const latField = document.getElementById('id_latitude');
+        const lngField = document.getElementById('id_longitude');
+        const pidField = document.getElementById('id_place_id');
+
+        loadGoogleMapsModalScript(function(success) {
+          if (success && window.google && window.google.maps) {
+            initializeGoogleMapsModal(mapContainer, streetInput, latField, lngField, pidField);
+          } else {
+            createLeafletModalMap(mapContainer, latField, lngField, pidField, streetInput);
+          }
+        });
+      });
+    }
+  })();
+});
+</script>
+{% endblock %}
