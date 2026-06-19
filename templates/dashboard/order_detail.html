@@ -80,7 +80,7 @@
           <div class="small text-muted mb-3">Kode Unik: <strong class="text-danger">{{ order.unique_code }}</strong></div>
           
           <!-- Bank & Proof of Transfer audit details -->
-          {% with payment=order.payments.last %}
+          {% with payment=last_payment %}
             {% if payment %}
               <div class="bg-light p-3 rounded mb-3 small text-muted">
                 <div class="mb-1">Bank Dipilih: <strong class="text-dark">{{ payment.get_selected_bank_display }}</strong></div>
@@ -90,13 +90,17 @@
                   <div class="mb-1">Tanggal Kirim: <strong class="text-dark">{{ payment.payment_date|date:"d M Y H:i" }} WIB</strong></div>
                 {% endif %}
               </div>
-              {% if payment.proof_of_transfer %}
+              {% if payment.proof_of_transfer and payment.proof_exists %}
                 <div class="mb-3 text-center">
                   <span class="small text-muted d-block mb-1 text-start">Bukti Transfer:</span>
                   <a href="{{ payment.proof_of_transfer.url }}" target="_blank">
                     <img src="{{ payment.proof_of_transfer.url }}" alt="Bukti Transfer" class="img-thumbnail" style="max-height: 200px; object-fit: cover;">
                   </a>
                   <small class="text-muted d-block mt-1">(Klik gambar untuk memperbesar)</small>
+                </div>
+              {% elif payment.proof_of_transfer and not payment.proof_exists %}
+                <div class="mb-3 text-center text-muted small">
+                  Bukti transfer terdaftar tapi file tidak ditemukan di server.
                 </div>
               {% endif %}
             {% endif %}
