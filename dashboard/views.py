@@ -281,10 +281,20 @@ class AdminOrderDetailView(AdminRequiredMixin, View):
             'tracking_number': order.shipment.tracking_number if hasattr(order, 'shipment') else '',
             'shipment_status': order.shipment.status if hasattr(order, 'shipment') else 'PENDING'
         })
+        # Determine latest payment and whether its proof file exists on storage
+        last_payment = order.payments.order_by('-created_at').first()
+        if last_payment and last_payment.proof_of_transfer:
+            try:
+                exists = last_payment.proof_of_transfer.storage.exists(last_payment.proof_of_transfer.name)
+            except Exception:
+                exists = False
+            # attach helper flag for template
+            setattr(last_payment, 'proof_exists', exists)
         return render(request, 'dashboard/order_detail.html', {
             'order': order,
             'items': order.items.all().select_related('product'),
-            'form': form
+            'form': form,
+            'last_payment': last_payment,
         })
 
     def post(self, request, pk):
