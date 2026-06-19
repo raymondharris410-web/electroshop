@@ -137,8 +137,15 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = env('MEDIA_URL', default='/media/')
+# Use writable temporary storage for media in serverless/read-only deployments such as Vercel or AWS Lambda.
+if os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'):
+    default_media_root = os.path.join('/tmp', 'media')
+else:
+    default_media_root = os.path.join(BASE_DIR, 'media')
+
+MEDIA_ROOT = env('MEDIA_ROOT', default=default_media_root)
+os.makedirs(MEDIA_ROOT, exist_ok=True)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
